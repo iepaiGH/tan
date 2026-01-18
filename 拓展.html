@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>正切函数：周期性与对称性演示</title>
+    <style>
+        :root {
+            --ox: 550px; 
+            --oy: 300px; 
+            --pi: 3.1415926535;
+            
+            /* 同步学术白金配色 */
+            --bg-page: #ffffff;
+            --bg-scene: #f8f9fa;
+            --panel-bg: #ffffff;
+            --axis-color: #2d3436;
+            --main-curve: #d63031; /* 红色：主分支 */
+            --sym-curve: #00b894;  /* 绿色：对称构造 */
+            --period-curve: #0984e3; /* 蓝色：周期重复 */
+            --text-main: #2d3436;
+            --border-ui: #dfe6e9;
+        }
+
+        body {
+            background: var(--bg-page); color: var(--text-main); margin: 0;
+            display: flex; flex-direction: column; align-items: center;
+            font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; 
+            height: 100vh; overflow: hidden;
+        }
+
+        /* 顶部控制栏 */
+        .controls {
+            background: var(--panel-bg); padding: 12px 25px; border-radius: 50px;
+            display: flex; align-items: center; gap: 20px; 
+            z-index: 100; border: 1px solid var(--border-ui);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            margin: 20px 0;
+        }
+
+        input[type=range] { width: 150px; cursor: pointer; }
+
+        button { 
+            padding: 8px 18px; font-size: 14px; cursor: pointer; 
+            background: #ffffff; border: 1px solid var(--border-ui); color: var(--text-main); 
+            border-radius: 20px; transition: all 0.2s; 
+        }
+        button:hover { border-color: var(--period-curve); background: #f1f2f6; }
+        
+        .btn-active { background: #ebf5ff; border-color: var(--period-curve); color: var(--period-curve); font-weight: bold; }
+
+        .scene { 
+            position: relative; width: 1100px; height: 600px; 
+            background: var(--bg-scene); border: 1px solid var(--border-ui); border-radius: 15px;
+            overflow: hidden;
+        }
+
+        #coord-layer { position: absolute; width: 100%; height: 100%; }
+        .axis { position: absolute; background: var(--axis-color); pointer-events: none; }
+        .x-axis { width: 100%; height: 1.5px; left: 0; top: var(--oy); }
+        .y-axis { width: 1.5px; height: 100%; left: var(--ox); top: 0; }
+
+        /* 渐近线样式 */
+        .asymptote {
+            position: absolute; width: 1px; height: 100%;
+            border-left: 1.5px dashed #b2bec3;
+            top: 0; z-index: 1;
+        }
+
+        svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; }
+        .tan-path { fill: none; stroke-width: 3; stroke-linecap: round; transition: opacity 0.3s; }
+        
+        /* 对应主程序配色逻辑 */
+        .path-main { stroke: var(--main-curve); stroke-width: 4; }
+        .path-sym { stroke: var(--sym-curve); }
+        .path-periodic { stroke: var(--period-curve); opacity: 0.6; }
+
+        .label { 
+            position: absolute; color: var(--axis-color); font-size: 14px; 
+            font-weight: bold; transform: translateX(-50%); pointer-events: none; 
+        }
+
+        /* 返回按钮样式 */
+        .back-btn {
+            position: fixed; bottom: 30px; left: 30px;
+            text-decoration: none; color: #636e72; font-size: 14px;
+            display: flex; align-items: center; gap: 5px;
+        }
+        .back-btn:hover { color: var(--main-curve); }
+    </style>
+</head>
+<body>
+
+<a href="index.html" class="back-btn">← 返回定义演示</a>
+
+<div class="controls">
+    <div style="display: flex; align-items: center; gap: 10px; border-right: 1px solid var(--border-ui); padding-right: 20px;">
+        <span style="font-size: 14px; color: #636e72;">图象缩放:</span>
+        <input type="range" id="zoomRange" min="30" max="200" step="1" value="80">
+        <span id="zoomVal" style="font-weight: bold; width: 50px;">80px</span>
+    </div>
+    <button id="btnSym" onclick="runSymmetry()">1. 中心对称展示</button>
+    <button id="btnPer" onclick="runPeriodicity()">2. 周期性铺满</button>
+    <button onclick="location.reload()" style="color: #d63031;">重置图象</button>
+</div>
+
+<div class="scene">
+    <div id="coord-layer">
+        <div class="axis x-axis"></div>
+        <div class="axis y-axis"></div>
+        <div id="grid-container"></div>
+        <svg id="svg-layer">
+            <path id="path-main" class="tan-path path-main"></path>
+            <path id="path-sym" class="tan-path path-sym"></path>
+            <g id="periodic-group"></g>
+        </svg>
+    </div>
+</div>
+
+<script>
+    let r = 80; 
+    const ox = 550, oy = 300, pi = Math.PI;
+
+    let symmetryState = 0; 
+    let isPeriodEnabled = false;
+    let symCurrentX = 0;
+
+    function draw() {
+        const grid = document.getElementById('grid-container');
+        const period = pi * r;
+        const limitX = period / 2 - Math.max(1, r * 0.02); 
+
+        document.getElementById('periodic-group').innerHTML = "";
+        grid.innerHTML = "";
+
+        // 1. 绘制主分支 [0, pi/2)
+        const pathMain = document.getElementById('path-main');
+        pathMain.setAttribute("d", generatePath(0, 0, limitX));
+
+        // 2. 绘制对称分支
+        const pathSym = document.getElementById('path-sym');
+        if (symmetryState === 2) {
+            pathSym.setAttribute("d", generatePath(0, -limitX, 0));
+        } else if (symmetryState === 1) {
+            pathSym.setAttribute("d", generatePath(0, symCurrentX, 0));
+        }
+
+        // 3. 周期铺满
+        if (isPeriodEnabled) {
+            const kRange = Math.ceil(800 / period) + 1;
+            for (let k = -kRange; k <= kRange; k++) {
+                if (k === 0) continue;
+                const group = document.getElementById('periodic-group');
+                const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                p.setAttribute("class", "tan-path path-periodic");
+                p.setAttribute("d", generatePath(k * period, -limitX, limitX));
+                group.appendChild(p);
+
+                // 动态标注周期点
+                let labelText = k + "π";
+                if (k === 1) labelText = "π";
+                if (k === -1) labelText = "-π";
+                addMarker(k * period, labelText, ox + k * period + period/2);
+            }
+        }
+
+        // 基础渐近线与0点
+        addMarker(0, "0", ox + period/2);
+        addMarker(0, "", ox - period/2);
+    }
+
+    function generatePath(offsetX, xMin, xMax) {
+        let d = "";
+        const step = r < 40 ? 2 : 1; 
+        for (let x = xMin; x <= xMax; x += step) {
+            const py = oy - r * Math.tan(x / r);
+            if (py < -1000 || py > 1500) continue;
+            const px = ox + x + offsetX;
+            d += (d === "") ? `M ${px} ${py}` : ` L ${px} ${py}`;
+        }
+        return d;
+    }
+
+    function addMarker(offsetX, text, asymX) {
+        const grid = document.getElementById('grid-container');
+        if (text && asymX > -100 && asymX < 1200) {
+            const lbl = document.createElement('div');
+            lbl.className = 'label';
+            lbl.style.left = (ox + offsetX) + 'px';
+            lbl.style.top = (oy + 15) + 'px';
+            lbl.innerHTML = text;
+            grid.appendChild(lbl);
+        }
+        // 绘制渐近线
+        if (asymX > 0 && asymX < 1100) {
+            const div = document.createElement('div');
+            div.className = 'asymptote';
+            div.style.left = asymX + 'px';
+            grid.appendChild(div);
+        }
+    }
+
+    function runSymmetry() {
+        if (symmetryState !== 0) return;
+        document.getElementById('btnSym').classList.add('btn-active');
+        symmetryState = 1;
+        const limitX = (pi * r) / 2 - (r * 0.05);
+        const anim = () => {
+            if (symCurrentX >= -limitX) {
+                symCurrentX -= (r * 0.1);
+                draw();
+                requestAnimationFrame(anim);
+            } else {
+                symmetryState = 2;
+                draw();
+            }
+        };
+        anim();
+    }
+
+    function runPeriodicity() {
+        isPeriodEnabled = true;
+        document.getElementById('btnPer').classList.add('btn-active');
+        draw();
+    }
+
+    document.getElementById('zoomRange').oninput = function() {
+        r = parseInt(this.value);
+        document.getElementById('zoomVal').innerText = r + "px";
+        draw();
+    };
+
+    window.onload = draw;
+</script>
+</body>
+</html>

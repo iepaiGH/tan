@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>正切函数：学术白金版</title>
+    <style>
+        :root {
+            --r: 80px;
+            --duration: 4s;
+            --scene-width: 1100px;
+            --origin-x: 550px; 
+            --origin-y: 450px;
+            --pi: 3.1415926535;
+            --quarter-circ: calc(0.5 * var(--pi) * var(--r));
+            --static-center-x: calc(var(--origin-x) - var(--r) - 100px); 
+            
+            /* 白色主题配色 */
+            --bg-page: #ffffff;
+            --bg-scene: #f8f9fa;
+            --panel-bg: #ffffff;
+            --axis-color: #2d3436;
+            --main-curve: #d63031; 
+            --tan-color: #00b894;  
+            --vector-color: #e67e22; 
+            --wheel-color: #0984e3; 
+            --text-main: #2d3436;
+            --border-ui: #dfe6e9;
+        }
+
+        body {
+            background: var(--bg-page); color: var(--text-main); margin: 0; height: 100vh;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; overflow: hidden;
+        }
+
+        .controls {
+            margin-bottom: 25px; background: var(--panel-bg); padding: 12px 25px;
+            border-radius: 50px; display: flex; flex-wrap: wrap; gap: 12px; 
+            align-items: center; z-index: 100; border: 1px solid var(--border-ui);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        }
+
+        .ext-link-container {
+            position: fixed; bottom: 30px; right: 30px; z-index: 1000;
+        }
+
+        input { width: 45px; padding: 6px; border: 1px solid var(--border-ui); text-align: center; border-radius: 6px; font-weight: bold;}
+        
+        button { 
+            padding: 8px 18px; font-size: 14px; cursor: pointer; 
+            background: #ffffff; border: 1px solid var(--border-ui); color: var(--text-main); 
+            border-radius: 20px; transition: all 0.2s; 
+        }
+        button:hover:not(:disabled) { border-color: var(--wheel-color); background: #f1f2f6; }
+        
+        .btn-primary { background: var(--wheel-color); border: none; color: white !important; }
+        .active-toggle { background: #ebf5ff; border-color: var(--wheel-color); color: var(--wheel-color); font-weight: bold; }
+        .btn-warn { background: var(--vector-color); border: none; color: white !important; font-weight: bold; }
+        .btn-special { background: var(--main-curve); border: none; color: white !important; font-weight: bold; }
+
+        .btn-link { 
+            background: linear-gradient(135deg, #6c5ce7, #a29bfe); border: none; 
+            color: white; font-weight: bold; text-decoration: none; 
+            padding: 12px 24px; border-radius: 30px; display: flex; align-items: center;
+            box-shadow: 0 4px 15px rgba(108, 92, 231, 0.3);
+        }
+
+        .scene { 
+            position: relative; width: var(--scene-width); height: 600px; 
+            background: var(--bg-scene); border: 1px solid var(--border-ui); border-radius: 15px;
+            overflow: hidden;
+        }
+
+        .axis { position: absolute; background: var(--axis-color); }
+        .x-axis { width: 1020px; height: 1.5px; left: 40px; top: var(--origin-y); }
+        .y-axis { width: 1.5px; height: 550px; left: var(--origin-x); top: 25px; }
+        .track { position: absolute; top: var(--origin-y); left: var(--origin-x); height: 3px; background: var(--vector-color); width: 0; }
+
+        .arc-base {
+            position: absolute; width: calc(var(--r) * 2); height: calc(var(--r) * 2);
+            border: 2.5px solid; box-sizing: border-box; border-radius: 50%;
+            transition: opacity 0.4s ease;
+        }
+
+        #wheel {
+            left: calc(var(--origin-x) - var(--r)); 
+            top: calc(var(--origin-y) - var(--r) * 2);
+            border-color: var(--wheel-color); clip-path: inset(50% 0% 0% 50%); 
+            z-index: 5; animation: roll-quarter var(--duration) linear forwards; animation-play-state: paused;
+        }
+
+        #static-circle {
+            left: calc(var(--static-center-x) - var(--r)); 
+            top: calc(var(--origin-y) - var(--r));
+            border-color: var(--tan-color); clip-path: inset(0% 0% 50% 50%); z-index: 2;
+        }
+
+        .radial-tick {
+            position: absolute; width: calc(var(--r) * 0.12); height: 2px;
+            background: currentColor; left: 50%; top: 50%; transform-origin: left center;
+        }
+
+        .label-text { position: absolute; font-size: 13px; transform: translate(-50%, -50%); color: #636e72; font-weight: 500; }
+        .point-label { position: absolute; font-size: 14px; font-weight: bold; transform: translate(12px, -50%); }
+        .ray { position: absolute; height: 1px; background: rgba(0, 184, 148, 0.25); transform-origin: left center; }
+        .tan-segment { position: absolute; width: 3px; background: var(--tan-color); z-index: 3; }
+        .vector-line { position: absolute; width: 3px; background: var(--vector-color); z-index: 6; transition: left 1.2s cubic-bezier(0.4, 0, 0.2, 1); transform: translate(-50%, -100%); }
+        .vector-line::before { content: ''; position: absolute; left: -3.5px; top: -5px; border: 5px solid transparent; border-bottom-color: inherit; }
+        #tangent-path { fill: none; stroke: var(--main-curve); stroke-width: 4; stroke-linecap: round; }
+
+        .table-marker { position: absolute; top: var(--origin-y); transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; opacity: 0; }
+        .tick-line { width: 2px; height: 12px; background: var(--axis-color); transform: translateY(-50%); }
+        .table-label { margin-top: 10px; font-size: 14px; color: var(--axis-color); font-weight: bold; }
+
+        @keyframes roll-quarter {
+            0% { transform: translateX(0) rotate(0deg); }
+            100% { transform: translateX(var(--quarter-circ)) rotate(90deg); }
+        }
+    </style>
+</head>
+<body>
+
+<div class="controls">
+    <div style="display:flex; align-items:center; gap:8px; border-right:1px solid var(--border-ui); padding-right:15px;">
+        <input type="number" id="inputSegments" value="4" min="1" max="20">
+        <button onclick="applySettings()" class="btn-primary">应用</button>
+    </div>
+    <button id="btnPlay">1. 滚动演示</button>
+    <button id="toggleArc" class="active-toggle" onclick="toggleWheelArc()">显示滚动弧：开</button>
+    <button id="toggleTan" onclick="showTanSteps()">2. 开启构造</button>
+    <button id="btnTranslate" class="btn-warn">3. 平移向量</button>
+    <button id="btnDrawCurve" class="btn-special">4. 绘制曲线</button>
+    <button onclick="location.reload()" style="color:#d63031; border-color:#fab1a0;">重置</button>
+</div>
+
+<div class="ext-link-container">
+    <a href="拓展.html" class="btn-link">进入拓展演示 (多周期) →</a>
+</div>
+
+<div class="scene">
+    <svg id="svg-layer" style="position:absolute; width:100%; height:100%; pointer-events:none; z-index:10;">
+        <path id="tangent-path" d=""></path>
+    </svg>
+    <div class="axis x-axis"></div>
+    <div class="axis y-axis"></div>
+    
+    <div id="wheel-container">
+        <div class="track" id="track"></div>
+        <div id="wheel" class="arc-base"></div>
+    </div>
+    <div id="static-circle" class="arc-base"></div>
+
+    <div id="tan-elements-container">
+        <div id="rays-container"></div>
+        <div id="original-tan-container"></div>
+    </div>
+    <div id="cloned-tan-container"></div>
+</div>
+
+<script>
+    const r = 80, originX = 550, originY = 450, pi = Math.PI;
+    const staticCenterX = originX - r - 100, staticCenterY = originY;
+    let segments = 4, markers = [], tanData = [];
+
+    // 修改：仅切换滚动圆弧（wheel）的显示隐藏
+    function toggleWheelArc() {
+        const wheel = document.getElementById('wheel');
+        const btn = document.getElementById('toggleArc');
+        const isCurrentlyVisible = (wheel.style.opacity !== '0');
+        
+        wheel.style.opacity = isCurrentlyVisible ? '0' : '1';
+        btn.innerText = isCurrentlyVisible ? '显示滚动弧：关' : '显示滚动弧：开';
+        btn.classList.toggle('active-toggle', !isCurrentlyVisible);
+    }
+
+    function getRadianLabel(i, n) {
+        if (i === 0) return "0";
+        if (i*2 === n) return "π/4";
+        if (i === n) return "π/2";
+        const gcd = (a, b) => b ? gcd(b, a % b) : a;
+        let num = i, den = n * 2;
+        let common = gcd(num, den);
+        return (num/common === 1 ? "π" : (num/common)+"π") + "/" + (den/common);
+    }
+
+    function createArcMarker(parent, angleDeg, label, color, showLabel) {
+        const rad = angleDeg * (pi / 180);
+        const tick = document.createElement('div');
+        tick.className = 'radial-tick';
+        tick.style.color = color;
+        tick.style.transform = `rotate(${angleDeg}deg) translateX(calc(${r}px - 50%))`;
+        parent.appendChild(tick);
+        if (showLabel) {
+            const txt = document.createElement('div');
+            txt.className = 'label-text';
+            const offset = r + 25;
+            txt.style.left = `calc(50% + ${Math.cos(rad) * offset}px)`;
+            txt.style.top = `calc(50% + ${Math.sin(rad) * offset}px)`;
+            txt.innerHTML = label;
+            parent.appendChild(txt);
+        }
+    }
+
+    function initScene() {
+        const wheelEl = document.getElementById('wheel');
+        const staticEl = document.getElementById('static-circle');
+        wheelEl.innerHTML = ''; staticEl.innerHTML = '';
+        document.getElementById('rays-container').innerHTML = '';
+        document.getElementById('original-tan-container').innerHTML = '';
+        document.getElementById('cloned-tan-container').innerHTML = '';
+        document.querySelectorAll('.table-marker').forEach(el => el.remove());
+        document.getElementById('tangent-path').setAttribute('d', '');
+        document.getElementById('track').style.width = '0';
+
+        segments = parseInt(document.getElementById('inputSegments').value) || 4;
+        tanData = []; markers = [];
+
+        for (let i = 0; i <= segments; i++) {
+            const angleRad = (i * (pi/2) / segments);
+            const angleDeg = i * 90 / segments;
+            const label = getRadianLabel(i, segments);
+            const showL = (segments <= 3) || (i/segments === 0 || i/segments === 0.5 || i/segments === 1);
+
+            createArcMarker(wheelEl, 90 - angleDeg, label, '#0984e3', showL);
+            createArcMarker(staticEl, -angleDeg, label, '#00b894', showL);
+
+            if (i < segments) {
+                const ray = document.createElement('div');
+                ray.className = 'ray'; ray.style.opacity = '0';
+                ray.style.left = staticCenterX + 'px'; ray.style.top = staticCenterY + 'px';
+                ray.style.width = (r / Math.cos(angleRad) + 20) + 'px';
+                ray.style.transform = `rotate(${-angleDeg}deg)`;
+                ray.dataset.index = i;
+                document.getElementById('rays-container').appendChild(ray);
+
+                const tanLen = r * Math.tan(angleRad);
+                const tanLine = document.createElement('div');
+                tanLine.className = 'tan-segment'; tanLine.style.opacity = '0';
+                tanLine.style.left = (staticCenterX + r) + 'px';
+                tanLine.style.top = (staticCenterY - tanLen) + 'px';
+                tanLine.style.height = tanLen + 'px';
+                tanLine.dataset.index = i;
+                tanLine.innerHTML = `<div class="point-label" style="color:#00b894">T<sub>${i}</sub></div>`;
+                document.getElementById('original-tan-container').appendChild(tanLine);
+                tanData.push({ h: tanLen, x: staticCenterX + r, index: i });
+            }
+
+            const div = document.createElement('div');
+            div.className = 'table-marker';
+            const dist = angleRad * r;
+            div.style.left = (originX + dist) + 'px';
+            div.innerHTML = `<div class="tick-line"></div>` + (showL ? `<div class="table-label">${label}</div>` : '');
+            document.querySelector('.scene').appendChild(div);
+            markers.push({ element: div, pos: dist });
+        }
+    }
+
+    function applySettings() {
+        initScene();
+        const wheel = document.getElementById('wheel');
+        wheel.style.animation = 'none'; wheel.offsetHeight;
+        wheel.style.animation = `roll-quarter var(--duration) linear forwards`;
+        wheel.style.animationPlayState = 'paused';
+    }
+
+    document.getElementById('btnPlay').onclick = function() {
+        this.classList.add('active-toggle');
+        document.getElementById('wheel').style.animationPlayState = 'running';
+        const update = () => {
+            const matrix = new WebKitCSSMatrix(window.getComputedStyle(document.getElementById('wheel')).transform);
+            const x = matrix.m41;
+            document.getElementById('track').style.width = Math.min(x, (pi/2)*r) + 'px';
+            markers.forEach(m => { if (x >= m.pos - 0.1) m.element.style.opacity = "1"; });
+            if (x < (pi/2)*r - 0.5) requestAnimationFrame(update);
+        };
+        update();
+    };
+
+    async function showTanSteps() {
+        document.getElementById('toggleTan').classList.add('active-toggle');
+        for (let i = 0; i < segments; i++) {
+            document.querySelectorAll(`[data-index="${i}"]`).forEach(el => el.style.opacity = '1');
+            await new Promise(r => setTimeout(r, 200));
+        }
+    }
+
+    document.getElementById('btnTranslate').onclick = function() {
+        this.classList.add('active-toggle');
+        const container = document.getElementById('cloned-tan-container');
+        container.innerHTML = '';
+        tanData.forEach((data, i) => {
+            setTimeout(() => {
+                const v = document.createElement('div');
+                v.className = 'vector-line';
+                v.style.left = data.x + 'px'; v.style.top = originY + 'px'; v.style.height = data.h + 'px';
+                v.innerHTML = `<div class="point-label" style="color:var(--vector-color)">T<sub>${data.index}</sub></div>`;
+                container.appendChild(v);
+                requestAnimationFrame(() => { v.style.left = (originX + markers[i].pos) + 'px'; });
+            }, i * 150);
+        });
+    };
+
+    document.getElementById('btnDrawCurve').onclick = function() {
+        this.classList.add('active-toggle');
+        const path = document.getElementById('tangent-path');
+        let curX = 0;
+        let d = `M ${originX} ${originY}`;
+        const animate = () => {
+            if (curX <= (pi/2)*r) {
+                d += ` L ${originX + curX} ${originY - r * Math.tan(curX / r)}`;
+                path.setAttribute('d', d);
+                curX += 2;
+                requestAnimationFrame(animate);
+            }
+        };
+        animate();
+    };
+
+    initScene();
+</script>
+</body>
+</html>
